@@ -1,20 +1,8 @@
 const request = require('request'),
-      cheerio = require('cheerio'),
-      { Pool } = require('pg'),
       puppeteer = require('puppeteer'),
       fs = require('fs'),
       path = require('path'),
       axios = require('axios');
-
-const chromeLauncher = require('chrome-launcher');
-const CDP = require('chrome-remote-interface');
-
-const pool = new Pool({
-    user: 'postgres',
-    host: 'localhost',
-    database: 'parser_z7mall',
-    password: 'HikigayaHachiman'
-});
 
 let temporary_storage = {
     directory_links: [
