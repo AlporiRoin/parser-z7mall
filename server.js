@@ -9,6 +9,6 @@ app.use( body_parser.json( ) );
 app.use( body_parser.urlencoded( ) );
 
 app.listen( 53425, ( ) => {
-    robot.DetectingTheFollowingLink( );
+    robot.FullScan( );
     console.log( 'Сервер начал работу!' );
 });

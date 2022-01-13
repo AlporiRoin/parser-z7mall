@@ -1,6 +1,10 @@
-const request = require('request');
-const cheerio = require('cheerio');
-const { Pool } = require('pg');
+const request = require('request'),
+      cheerio = require('cheerio'),
+      { Pool } = require('pg'),
+      puppeteer = require('puppeteer'),
+      fs = require('fs'),
+      path = require('path'),
+      axios = require('axios');
 
 const chromeLauncher = require('chrome-launcher');
 const CDP = require('chrome-remote-interface');
@@ -12,270 +16,432 @@ const pool = new Pool({
     password: 'HikigayaHachiman'
 });
 
-let storage = {
-    data_to_scan: [],
-    pages_to_scan: []
-};
+let temporary_storage = {
+    directory_links: [
+        'https://www.lazada.co.th/shop-mobiles/?spm=a2o4m.home.cate_1_1.1.52c72a80abMkBz',
+        'https://www.lazada.co.th/shop-tablet/?spm=a2o4m.home.cate_1_2.1.52c72a80HIYYKs',
+    ],
+    crawl_links: [],
+    product_links: []
+}
 
-function GettingDataToCollectInformation( ) {
+async function ScanReviews ( card_address ) {
 
-    pool.connect( ( err, client, release ) => {
+    let storage = [];
 
-        if ( err ) {
+    const browser = await puppeteer.launch( );
+    const page = await browser.newPage( );
+    await page.setDefaultNavigationTimeout( 0 );
+    await page.goto( card_address );
 
-            console.log( err );
+    const Reviews = async ( ) => {
+        const reviews = await page.evaluate(( ) => {
 
-        }
+            // const number_of_reviews = document.querySelector(`.mod-reviews`).childNodes.length;
+            // const number_of_images = document.querySelector(`.review-image__list`).childNodes.length
 
-        client.query( 'SELECT url_addresses, name_catalog FROM data_to_scan;', ( err, res ) => {
+            // let pseudo_storage = [];
 
-            release( );
+            // for ( let i = 1; i <= number_of_reviews; i++ ) {
 
-            if ( err ) {
+            //     let text = document.querySelector( `.item:nth-child( ${ i } ) .item-content .content` ).textContent;
 
-                console.log( err );
-    
-            }
+            //     let image_addresses = [];
 
-            for ( let row of res.rows ) {
+            //     for ( let r = 1; r <= number_of_images; r++ ) {
 
-                storage.data_to_scan.push( row );
-    
-            }
+            //         // let image = document.querySelector(`.review-image__item:nth-child( ${ r } )`).outerHTML;
+            //         let image = document.getElementById(`block-3VtVgZo7a75`).querySelector( '.mod-reviews' ).outerHTML;
+            //         // let style = image.currentStyle || window.getComputedStyle( image, false );
+            //         // let bi = style.backgroundImage.slice(4, -1).replace(/"/g, "");
 
-        });
+            //         image_addresses.push( image );
 
-    });
+            //     }
 
-    return;
+            //     pseudo_storage.push( image_addresses );
+
+            // }
+
+            return document.getElementById(`block-3VtVgZo7a75`).outerHTML;
+
+        }).catch( e  => console.dir(e));
+
+        // storage.push( reviews );
+
+        fs.writeFileSync( 'page.html', reviews )
+
+        console.log( "ok" );
+    };
+
+    Reviews( );
 
 }
 
+async function FullScan( ) {
 
-function CheckingTheExistenceOfTheDirectoryTable( name_catalog ) {
+    const browser = await puppeteer.launch( );
+    console.log( 'Браузер создан' );
 
-    pool.connect( ( err, client, release ) => {
+    async function Checking__For__A__Bot ( ) {
 
-        if ( err ) {
+        const page = await browser.newPage( );
+        await page.setDefaultNavigationTimeout( 0 );
+        await page.goto( temporary_storage.directory_links[0] ).then(async( ) => {
+            console.log( 'Загружена страница:' + temporary_storage.directory_links[0] );
 
-            console.log( err );
-
-        }
-
-        client.query( `SELECT EXISTS ( SELECT * 
-            FROM information_schema.tables 
-            WHERE table_name = '${ name_catalog }'
-            AND table_schema = 'public')::int   AS  "column";`, ( err, res ) => {
-
-                release( );
-
-                if ( err ) {
-
-                    console.log( err );
-        
-                }
-    
-                if ( res.rows.column === 0 ) {
-    
-                    return false;
-    
-                }
-    
-                if ( res.rows.column === 1 ) {
-    
-                    return true;
-    
-                }
-
+            const query = await page.evaluate(( ) => {
+                return document.querySelector( '.JrAyI' ).textContent;
+            }).then(( html ) => {
+                console.log( html );
+            }).catch(( e ) => {
+                console.log( e );
+            });
         });
+        await page.goto( temporary_storage.directory_links[1] ).then(async( ) => {
+            console.log( 'Загружена страница:' + temporary_storage.directory_links[1] );
 
-    });
-
-}
-
-
-function CreatingACatalogTable( name_catalog ) {
-
-    pool.connect( ( err, client, release ) => {
-
-        if ( err ) {
-
-            console.log( err );
-
-        }
-
-        client.query( `CREATE TABLE "${ name_catalog }" (
-            product_name VARCHAR(255) NOT NULL,
-            product_price NUMERIC(10, 2) NOT NULL,
-            product_description TEXT,
-            product_features TEXT,
-            product_photos TEXT NOT NULL
-        );`, ( err, res ) => {
-
-            release( );
-
-            if ( err ) {
-
-                console.log( err );
-    
-                return false;
-    
-            }
-    
-            if ( res ) {
-    
-                return true;
-    
-            }
-
+            const query = await page.evaluate(( ) => {
+                return document.querySelector( '.JrAyI' ).textContent;
+            }).then(( html ) => {
+                console.log( html );
+            }).catch(( e ) => {
+                console.log( e );
+            });
         });
-
-    });
-
-}
-
-
-function DetectingADirectoryTable ( name_catalog ) {
-
-    let ExistenceOfTheTable = CheckingTheExistenceOfTheDirectoryTable( name_catalog );
-
-    if ( ExistenceOfTheTable === true ) {
-
-        return;
 
     }
 
-    if ( ExistenceOfTheTable === false ) {
+    async function Getting__Secondary__Links ( ) {
 
-        CreatingACatalogTable( name_catalog );
+        for ( let link of temporary_storage.directory_links ) {
 
-        return;
+            console.log( link );
+
+            const page = await browser.newPage( );
+            await page.setDefaultNavigationTimeout( 0 );
+            await page.goto( link );
+
+            const page_processing = await page.evaluate(( ) => {
+                return Number( document.querySelectorAll(`.ant-pagination-item`)[ document.querySelectorAll(`.ant-pagination-item`).length - 1 ].title );
+            }).then(( number ) => {
+
+                let crawl_links = [];
+
+                for ( let count = 1; count <= number; count++ ) {
+
+                    crawl_links.push( `${ link }&page=${ count }` );
+
+                }
+
+                temporary_storage.crawl_links.push( crawl_links );
+
+                return;
+
+            }).catch(( e ) => {
+                console.log( e );
+            });
+
+        }
 
     }
 
-};
+    async function Creating__A__Product__Directory ( ) {
 
 
-function DetectingTheFollowingLink( url_addresses ) {
 
-    (async function() {
-                async function launchChrome() {
-                  return await chromeLauncher.launch({
-                    chromeFlags: [
-                      '--disable-gpu',
-                      '--headless'
-                    ]
-                  });
-                }
-                const chrome = await launchChrome();
-                const protocol = await CDP({
-                  port: chrome.port
-                });
-                
-                const {
-                    DOM,
-                    Page,
-                    Emulation,
-                    Runtime
-                } = protocol;
-                await Promise.all([Page.enable(), Runtime.enable(), DOM.enable()]);
-        
-                Page.navigate({
-                    url: 'https://www.lazada.co.th/shop-mobiles/?spm=a2o4m.home.cate_1.1.11252a80A6i0i4'
-                });
-        
-                let script1_result;
-        
-                Page.loadEventFired(async() => {
-                    const request = "document.querySelector('.e5J1n').outerHTML";
-        
-                    const result = await Runtime.evaluate({
-                        expression: request
+    }
+
+    async function Finding__Product__Links( ) {
+
+        for ( let array of temporary_storage.crawl_links ) {
+
+            console.log( array );
+
+            for ( let count = 0; count <= 1; ) {
+
+                const page = await browser.newPage( );
+                await page.setDefaultNavigationTimeout( 0 );
+                await page.goto( array[ count ] );
+
+                const product_links = await page.evaluate(( ) => {
+
+                    let _95X4G = document.querySelectorAll( '._95X4G a' );
+    
+                    let link_storage = [];
+    
+                    for ( let link of _95X4G ) {
+    
+                        link_storage.push( link.href );
+    
+                    }
+    
+                    return link_storage;
+    
+                }).then(( res ) => {
+    
+                    temporary_storage.product_links.push( res );
+
+                    Crawling__Product__Pages( res ).then(( res ) => {
+                        if ( res ) {
+    
+                            count++;
+    
+                        }
+                    }).catch(( e ) => {
+                        console.log( e );
                     });
-
-                    const $ = cheerio.load( result.result.value );
-
-                    const antPagination = $( 'ul[class=ant-pagination]' ).children();
-                    let listOfLinkElements = [];
-                    let listLink = [];
-
-                    for ( let i = 0; i < antPagination.length; i++ ) {
-
-                        listOfLinkElements.push( antPagination[`${ i }`] );
-
-                    }
-
-                    for ( link of listOfLinkElements ) {
-
-                        listLink.push( link.children );
-
-                    }
-
-                    // const indexOfTheCurrentPage = antPagination.filter( li => { if (  ) });
-
-                    // console.log( listLink );
-                    console.log( listLink[3] );
-        
-                    protocol.close();
-                    chrome.kill();
+    
+                }).catch(( e ) => {
+                    console.log( e );
                 });
-                
-            })();
 
-}
-
-
-function ScanningPages( url_addresses, name_catalog ) {
-
-    console.log( url_addresses );
-
-    request( url_addresses, ( err, res, body ) => {
-
-        if ( err ) {
-
-            console.log( err );
+            }
 
         }
 
-        if ( body !== false ) {
-
-            console.log( true );
-
-        }
-
-    });
-
-}
-
-
-function FullScan( ) {
-
-    function Next( ) {
-
-        for ( let catalog_object of storage.data_to_scan ) {
-
-            DetectingADirectoryTable( catalog_object.name_catalog );
-
-            DetectingPagesToScan( catalog_object.url_addresses );
-
-            // ScanningPages( catalog_object.url_addresses, catalog_object.name_catalog );
-
-        }
+        console.log( temporary_storage.product_links );
 
     }
 
-    GettingDataToCollectInformation( );
+    async function Crawling__Product__Pages( array ) {
 
-    setTimeout( ( ) => {
-        Next();
-    }, 1000);
+        const page = await browser.newPage( );
+        await page.setDefaultNavigationTimeout( 0 );
+
+        for ( let elem = 0; elem <= 3; elem++ ) {
+
+            console.log( array[ elem ] );
+
+            const product_directory = path.join( __dirname, '../static/' , array[ elem ].match(/https:\/\/www\.lazada\.co\.th\/products\/(.+?)\.html/)[1] );
+
+            fs.mkdirSync(( product_directory ), ( err ) => {
+                if ( err ) {
+                    return console.error( err );
+                }
+            });
+
+            await page.goto( array[ elem ] );
+
+            let storage = {
+                link_to_the_page: '',
+                links_to_photos: [],
+                description: '',
+                price: '',
+                specifications: []
+            };
+
+            storage.link_to_the_page = array[ elem ];
+
+            const slider_preview_blocks = await page.evaluate(( ) => {
+                const array_of_blocks = Array.from( document.querySelectorAll('.next-slick-slide') );
+                return array_of_blocks.map( block => block.textContent );
+            });
+
+            let current_slider_image = await page.evaluate(( ) => {
+
+                if ( document.querySelector('.gallery-preview-panel__content img') !== null ) {
+
+                    return document.querySelector('.gallery-preview-panel__content img').src;
+
+                } else {
+
+                    return null;
+
+                }
+
+            }).then(( src ) => {
+                storage.links_to_photos.push( src );
+            }).catch(( e ) =>{
+                console.log( e );
+            });
+
+            for ( let count = 2; count <= slider_preview_blocks.length; count++ ) {
+
+                await page.hover(`.item-gallery__thumbnail:nth-child(${ count })`);
+              
+                current_slider_image = await page.evaluate(( ) => {
+                    return document.querySelector('.gallery-preview-panel img').src;
+                }).then(( src ) => {
+                    storage.links_to_photos.push( src );
+                }).catch(( e ) =>{
+                    console.log( e );
+                });
+        
+            }
+
+            let uploading_an_image = function ( url, filename, callback ) {
+
+                request.head( url, function( err, res, body ) {
+                    console.log('content-type:', res.headers['content-type']);
+                    console.log('content-length:', res.headers['content-length']);
+                
+                    request( url ).pipe( fs.createWriteStream( filename ) ).on( 'close', callback );
+                });
+
+            };
+
+            // const uploading_an_image = (url, image_path) =>
+            //     axios({
+            //         url,
+            //         responseType: 'stream',
+            //     }).then(
+            //         response =>
+            //             new Promise((resolve, reject) => {
+            //             response.data
+            //                 .pipe(fs.createWriteStream(image_path))
+            //                 .on('finish', () => resolve())
+            //                 .on('error', e => reject(e));
+            //             }),
+            // );
+
+            for ( let image_path of storage.links_to_photos ) {
+
+                uploading_an_image( image_path, product_directory, function( ) {
+                    console.log( 'Изображение загружено!' );
+                });
+
+                // console.log( typeof image_path );
+
+                // (async () => {
+                //     await uploading_an_image( image_path , product_directory );
+                // })();
+
+            }
+
+            const description = await page.evaluate(( ) => {
+                return document.querySelector('.pdp-mod-product-badge-title').textContent;
+            }).then(( src ) => {
+                storage.description = src;
+            }).catch(( e ) =>{
+                console.log( e );
+            });
+
+            const price = await page.evaluate(( ) => {
+                const pdpPrice = document.querySelector('.pdp-price').textContent;
+                return pdpPrice.substr(1);
+            }).then(( price ) => {
+                storage.price = price;
+            }).catch(( e ) =>{
+                console.log( e );
+            });
+
+            const technical_specifications = await page.evaluate(( ) => {
+
+                if ( document.querySelector('.pdp-product-highlights ul') !== null ) {
+
+                    let processed_characteristics = [];
+        
+                    let number_of_characteristics = document.querySelector('.pdp-product-highlights ul').childNodes.length;
+            
+                    for ( let count = 1; count <= number_of_characteristics; count++ ) {
+            
+                        let description_text = document.querySelector(`.pdp-product-highlights ul li:nth-child( ${ count } )`).textContent;
+            
+                        let corrected_text = description_text.substr( 3 );
+            
+                        processed_characteristics.push( corrected_text );
+            
+                    }
+            
+                    return processed_characteristics;
+
+                } else if ( document.querySelectorAll('.pdp-product-desc h1')[0] !== null ) {
+
+                    let processed_characteristics = [];
+        
+                    let number_of_characteristics = document.querySelectorAll('.pdp-product-desc .detail-content').length;
+            
+                    for ( let count = 1; count <= number_of_characteristics; count++ ) {
+
+                        let description_text = document.querySelectorAll(`.pdp-product-desc h1:nth-child( ${ count } )`)[0].textContent;
+            
+                        processed_characteristics.push( description_text );
+            
+                    }
+            
+                    return processed_characteristics;
+
+                } else if ( document.querySelectorAll('.pdp-product-desc p')[0] !== null ) {
+
+                    let processed_characteristics = [];
+        
+                    let number_of_characteristics = document.querySelectorAll('.pdp-product-desc p').length;
+            
+                    for ( let count = 1; count <= number_of_characteristics; count++ ) {
+
+                        let description_text = document.querySelectorAll(`.pdp-product-desc p:nth-child( ${ count } )`)[0].textContent;
+            
+                        processed_characteristics.push( description_text );
+            
+                    }
+            
+                    return processed_characteristics;
+
+                } else {
+
+                    return undefined;
+
+                }
+        
+            }).then(( array_of_characteristics ) => {
+                storage.specifications.push( array_of_characteristics );
+            }).catch(( e ) =>{
+                console.log( e );
+            });
+
+            console.log( storage );
+
+        }
+
+        return true;
+
+    }
+
+    function Beginning( ) {
+
+        // Checking__For__A__Bot( ).then(( ) => {
+
+        //     (async( ) => {
+    
+        //         await browser.close().then(( ) => {
+        //             console.log( 'Браузер уничтожен' );
+        //         }).catch(( e ) => {
+        //             console.log( e );
+        //         });
+
+        //     })();
+
+        // });
+
+        Getting__Secondary__Links( ).then(( ) => {
+
+            console.log( 'Вторичные ссылки получены' );
+
+            Finding__Product__Links( ).then(( ) => {
+
+                console.log( temporary_storage.product_links );
+
+                (async( ) => {
+
+                    await browser.close().then(( ) => {
+                        console.log( 'Браузер уничтожен' );
+                    }).catch(( e ) => {
+                        console.log( e );
+                    });
+    
+                })();
+
+            });
+
+        });
+
+        return;
+
+    }
+
+    Beginning( );
 
 }
 
-// function test( ) {
-
-//     
-
-// }
-
-module.exports = { FullScan, DetectingTheFollowingLink };
+module.exports = { FullScan };
